@@ -16,6 +16,8 @@ import de.sciss.jcollider.UGenInfo;
 import de.sciss.jcollider.gui.ServerPanel;
 import de.sciss.net.OSCMessage;
 import processing.core.PApplet;
+import processing.core.PFont;
+
 import javax.swing.JFrame;
 
 import org.omg.CORBA.portable.InputStream;
@@ -31,8 +33,8 @@ public class NetChimes extends PApplet implements ServerListener {
 	NodeWatcher nw;
 	boolean readyForMessages = false;
 	float inpack,outpack,userpercent,systpercent;
-	float cpuvol = 1.1f;
-	float netvol = 0.03f;
+	float cpuvol = 0.5f;
+	float netvol = 0.1f;
 	float inpackLast = -1;
 	float outpackLast = -1;
 	Process topChild;
@@ -43,6 +45,10 @@ public class NetChimes extends PApplet implements ServerListener {
 	BufferedReader netResults;
 	float nextNetChildStartTime = 0;
 	float netInterval = 200;
+	// gui state
+	float gearA = 0;
+	float gearB = 0;
+	PFont fontA;
 
 	public void setup(){
 		size(200,200);
@@ -74,7 +80,7 @@ public class NetChimes extends PApplet implements ServerListener {
 		//to make new files, see the unused UGenCreator class.
 		loadDefs();
 		
-		//setup font
+		fontA = loadFont("../data/ArialNarrow-18.vlw");
 	}
 
 	public void draw(){
