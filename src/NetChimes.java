@@ -4,7 +4,8 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
-
+import java.net.URI;
+import java.net.URISyntaxException;
 import de.sciss.jcollider.Group;
 import de.sciss.jcollider.NodeWatcher;
 import de.sciss.jcollider.Server;
@@ -13,14 +14,9 @@ import de.sciss.jcollider.ServerListener;
 import de.sciss.jcollider.Synth;
 import de.sciss.jcollider.SynthDef;
 import de.sciss.jcollider.UGenInfo;
-import de.sciss.jcollider.gui.ServerPanel;
-import de.sciss.net.OSCMessage;
 import processing.core.PApplet;
 import processing.core.PFont;
-
 import javax.swing.JFrame;
-
-import org.omg.CORBA.portable.InputStream;
 
 public class NetChimes extends PApplet implements ServerListener {
 
@@ -40,37 +36,43 @@ public class NetChimes extends PApplet implements ServerListener {
 	Process topChild;
 	BufferedReader topResults;
 	float nextTopChildStartTime = 0;
-	float topInterval = 200;
+	float topInterval = 100;
 	Process netChild;
 	BufferedReader netResults;
 	float nextNetChildStartTime = 0;
-	float netInterval = 200;
-	// gui state
-	float gearA = 0;
-	float gearB = 0;
+	float netInterval = 100;
+	float readInterval = 100;
+	float nextReadTime = 0;
+	String prefix = "Network Chimes.app/Contents/Resources/Java/";
+	String[] defLocations = new String[]{ "sc/JNetChimes", "sc/JCpuBuzz" };
+	String serverLocation = "sc/scsynth";
+	// GUI
 	PFont fontA;
+	//PImage gear;
+	int boxClicked = 0; // 0 is neither, 1 is top(net), 2 is bottom(cpu)
 
 	public void setup(){
-		size(200,200);
+		size(320,150);
+		smooth();
 
 		try {
 			server = new Server("localhost");
 
 			UGenInfo.readBinaryDefinitions();
 
-			File f = new File("../sc/scsynth");
+			File f = new File(prefix+serverLocation);
 			String synthPath = f.getAbsolutePath();
-			//System.out.println(synthPath);
+			System.out.println(synthPath);
 			Server.setProgram(synthPath);
 			server.addListener( this );
 			try {
-				//server.boot();
-				server.start();
-				server.startAliveThread();
+				server.boot();
+				//server.start();
+				//server.startAliveThread();
 			}
 			catch( IOException e1 ) {  }
 			// feedback window
-			spf = ServerPanel.makeWindow( server, ServerPanel.MIMIC | ServerPanel.CONSOLE | ServerPanel.DUMP );
+			//spf = ServerPanel.makeWindow( server, ServerPanel.MIMIC | ServerPanel.CONSOLE | ServerPanel.DUMP );
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -79,26 +81,95 @@ public class NetChimes extends PApplet implements ServerListener {
 		//load the defs from files
 		//to make new files, see the unused UGenCreator class.
 		loadDefs();
-		
-		fontA = loadFont("../data/ArialNarrow-18.vlw");
+
+		//gear = loadImage("/gui/gear.png");
+		//fontA = loadFont("/gui/ArialNarrow-18.vlw");
+		fontA = createFont("ArialNarrow", 18);
+		textFont(fontA);
 	}
 
 	public void draw(){
-		readStats();
+		if (millis()>nextReadTime){
+			readStats();
+			nextReadTime = millis()+readInterval;
+		}
+		
+		
 		background(40,40,40);
 		
-		//draw two knobs
+		noStroke();
+		fill(60,80,80);
+		rect(10,10,width-20,60);
+		fill(100,180,180);
+		rect(10,10,map(netvol, 0, 1, 0, width-20),60);
 		
-		//draw text "Network Chimes volume"
-		//draw text "CPU Buzz volume"
+		fill(80,80,60);
+		rect(10,80,width-20,60);
+		fill(180,180,100);
+		rect(10,80,map(cpuvol, 0, 1, 0, width-20),60);
+
+		/*
+		float gearA = map(netvol, 0, 1, 0,TWO_PI);
+		float gearB = map(cpuvol, 0, 1, 0,TWO_PI);
+		
+		//draw two knobs
+		imageMode(CENTER);
+		
+		pushMatrix();
+		translate(225,40);
+		rotate(gearA);
+		image(gear,0,0);
+		popMatrix();
+		
+		pushMatrix();
+		translate(225,110);
+		rotate(gearB);
+		image(gear,0,0);
+		popMatrix();
+		*/
+		
+		//draw text
+		fill(255);
+		text("Network Chime Volume",20,40+9);
+		text("CPU Usage Buzz Volume",20,110+9);
+
+		text(((int)(netvol*100))+"%",260,40+9);
+		text(((int)(cpuvol*100))+"%",260,110+9);
 		
 		//draw more info button. (opens html file)
-		
 		
 	}
 
 	public void mousePressed(){
-
+		// did we click one of the boxes?
+		// which one?
+		if ( mouseX>10 && mouseX<(width-10) ){
+			if ( mouseY>10 && mouseY<70 ){
+				boxClicked = 1;
+			} else if ( mouseY>80 && mouseY<140 ){
+				boxClicked = 2;
+			}
+		}
+	}
+	
+	public void mouseDragged(){
+		if (boxClicked==1){
+			netvol = constrain(map(mouseX, 0, width-10, 0, 1),0,1);
+			//send message
+			if (readyForMessages){
+				try { netSynth.set("mul", netvol); } catch (IOException e) { e.printStackTrace(); }
+			}
+		} else if (boxClicked==2){
+			cpuvol = constrain(map(mouseX, 0, width-10, 0, 1),0,1);
+			//send message
+			if (readyForMessages){
+				try { cpuSynth.set("mul", cpuvol*3); } catch (IOException e) { e.printStackTrace(); }
+			}
+		}
+	}
+	
+	public void mouseReleased(){
+		boxClicked = 0;
 	}
 	
 	private void readStats(){
@@ -230,14 +301,14 @@ public class NetChimes extends PApplet implements ServerListener {
 	}
 
 	private void loadDefs(){
-		File[] defFiles = new File[]{ new File("../sc/JNetChimes"), new File("../sc/JCpuBuzz") };
-		SynthDef[] sdef;
-		for( int i = 0; i < defFiles.length; i++ ) {
+		for( int i = 0; i < defLocations.length; i++ ) {
+			File defFile;
 			try {
-				sdef = SynthDef.readDefFile( defFiles[ i ]);
+				defFile = new File(prefix+defLocations[i]);
+				SynthDef[] sdef = SynthDef.readDefFile( defFile);
 				defs[i] = sdef[0];  //stupid
 			} catch( IOException e1 ) {
-				System.err.println( defFiles[ i ].getName() + " : " + e1.getClass().getName() +
+				System.err.println( prefix+defLocations[i] + " : " + e1.getClass().getName() +
 						" : " + e1.getLocalizedMessage() );
 			}
 		}
@@ -291,6 +362,6 @@ public class NetChimes extends PApplet implements ServerListener {
 		cpuSynth = defs[1].play(grp);
 		readyForMessages = true;
 		netSynth.set("mul", netvol);
-		cpuSynth.set("mul", cpuvol);
+		cpuSynth.set("mul", cpuvol*3);
 	}
 }
